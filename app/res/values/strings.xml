@@ -2,4 +2,6 @@
 <resources>
     <string name="hello">Hello World, StartServiceActivity!</string>
     <string name="app_name">BackgroundUsbAccessory</string>
+    <string name="password_prompt">Enter Password Here</string>
+    <string name="authentication_failed">Authentication Failed</string>
 </resources>

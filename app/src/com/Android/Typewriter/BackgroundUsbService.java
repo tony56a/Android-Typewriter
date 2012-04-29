@@ -1,4 +1,4 @@
-package com.rancidbacon.BackgroundUsbAccessory;
+package com.Android.Typewriter;
 
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
@@ -19,14 +19,10 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.database.Cursor;
-import android.net.Uri;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
-import android.provider.ContactsContract.PhoneLookup;
-import android.telephony.SmsMessage;
-import android.text.format.Time;
 import android.util.Log;
 
 public class BackgroundUsbService extends IntentService {
@@ -40,33 +36,8 @@ public class BackgroundUsbService extends IntentService {
 	private ParcelFileDescriptor mFileDescriptor;
 	private FileInputStream mInputStream;
 	private FileOutputStream mOutputStream;	
-	
-	public class DisplayText {
-		private String text;
-		private int x;
-		private int y;
-		
-		public DisplayText(String text, int x, int y) {
-			this.text = text;
-			
-			this.x = x;
-			this.y = y;
-		}
 
-		public String getText() {
-			return text;
-		}
-
-		public int getX() {
-			return x;
-		}
-
-		public int getY() {
-			return y;
-		}
-	}
-	
-	private LinkedBlockingQueue<DisplayText> actionQueue = new LinkedBlockingQueue<DisplayText>();
+	private LinkedBlockingQueue<String> actionQueue = new LinkedBlockingQueue<String>();
 	
 	// We use this to catch the USB accessory detached message
 	private final BroadcastReceiver mUsbReceiver = new BroadcastReceiver() {
@@ -148,18 +119,6 @@ public class BackgroundUsbService extends IntentService {
 		}		
 	}
 	
-	private Handler mHandler = new Handler();
-	
-	private Runnable mUpdateTimeTask = new Runnable() {
-		   public void run() {
-			   actionQueue.add(new DisplayText(new SimpleDateFormat("HH:mm:ss").format(new Date()), 0, 0));
-			   
-			   // TODO: Switch to taking account of start time with System.currentTimeMillis()
-			   //       a la <http://developer.android.com/resources/articles/timed-ui-updates.html>.
-		       mHandler.postAtTime(this, (int) ((SystemClock.uptimeMillis() / 1000) + 1) * 1000);
-		   }
-		};
-	
 	@Override
 	protected void onHandleIntent(Intent theIntent) {
 		
@@ -184,13 +143,10 @@ public class BackgroundUsbService extends IntentService {
 		        mInputStream = new FileInputStream(fd);
 		        mOutputStream = new FileOutputStream(fd);
 		    }
-			
-		    mHandler.removeCallbacks(mUpdateTimeTask);
-		    mHandler.postDelayed(mUpdateTimeTask, 100);
+
+	    	registerReceiver(receiver, new IntentFilter("com.rancidbacon.BackgroundUsbAccessory.PRINT_MSG"));
 		    
-	    	registerReceiver(receiver, new IntentFilter("android.provider.Telephony.SMS_RECEIVED"));
-		    
-		    DisplayText newAction = null;
+		    String newAction = null;
 		    
 			while(true) {
 				
@@ -211,13 +167,9 @@ public class BackgroundUsbService extends IntentService {
 				// In reality we'd do stuff here.
 				
 				if (newAction != null) {
-					// TODO: Make use of x,y args here.
-					writeBytes(new byte[]{(byte) (newAction.getY()+1)});
-					writeBytes(newAction.getText().getBytes());
+					writeBytes(newAction.getBytes());
 				}
 			}		
-
-		    mHandler.removeCallbacks(mUpdateTimeTask);
 		    
 	    	unregisterReceiver(receiver);		    
 		    
@@ -246,38 +198,17 @@ public class BackgroundUsbService extends IntentService {
 		Log.d(TAG, "onHandleIntent exited");		
 	}
 
-	
+	//Replaced the original broadcastreceiver with a generic one, so that we can send multiple types of messages through
 	private BroadcastReceiver receiver = new BroadcastReceiver () {
 
 		@Override
 		public void onReceive(Context arg0, Intent arg1) {
 			
-			Log.d("BackgroundSmsReceiver", "onReceive entered");
-
-			for (Object thePdu : (Object []) arg1.getExtras().get("pdus") ) {
-				SmsMessage theMessage = SmsMessage.createFromPdu((byte []) thePdu);
-				
-				Cursor managedCursor = getContentResolver().query(Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, Uri.encode(theMessage.getOriginatingAddress())),
-						new String[]{PhoneLookup.DISPLAY_NAME},
-						null, null, null);
-				
-				String sender;
-				
-				if (managedCursor.moveToFirst()) {
-					sender = managedCursor.getString(managedCursor.getColumnIndex(PhoneLookup.DISPLAY_NAME));
-				} else {
-					sender = theMessage.getOriginatingAddress(); 
-				}
-				
-				Log.d("BackgroundSmsReceiver", "From: " + sender);
-				
-				actionQueue.add(new DisplayText((sender + ": " + theMessage.getMessageBody()).substring(0, 16), 0, 1));
-
-				Log.d("BackgroundSmsReceiver", theMessage.getMessageBody());				
-				
-				break; // We only care about the first one.
-			}
+			Bundle extras = arg1.getExtras();
+			String toWrite = extras.getString("MSG");
+			actionQueue.add(toWrite);
 			
+
 		}
 	};
 	

@@ -1,4 +1,4 @@
-package com.rancidbacon.BackgroundUsbAccessory;
+package com.Android.Typewriter;
 
 import android.app.Activity;
 import android.content.Intent;
